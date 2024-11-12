@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "smart-cal-event-creator"
+version = "0.1.0"
+description = ""
+authors = ["annyedge <annyedge@tutamail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.13"
+fastapi = "^0.115.4"
+icalendar = "^6.0.1"
+pytz = "^2024.2"
+ollama = "^0.3.3"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.3"
+black = "^24.10.0"
+flake8 = "^7.1.1"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
