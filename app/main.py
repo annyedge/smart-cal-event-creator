@@ -1,15 +1,17 @@
 from io import BytesIO
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Request
+from fastapi import Form
 from fastapi import HTTPException
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.responses import HTMLResponse
+from fastapi.responses import StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from app.services.ics_generator import create_ics
 from app.services.parser import parse_event_details
 
 app = FastAPI()
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="app/templates")
 
 
 @app.get("/", response_class=HTMLResponse)
