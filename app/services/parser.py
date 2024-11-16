@@ -2,70 +2,71 @@ import json
 import logging
 from typing import Optional
 
-import ollama
+import ollama  # Assuming you are using Ollama for language model processing
 
 from app.models.ics_model import ICSAttributes
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 
 
 def construct_prompt(event_text: str) -> str:
     """
-    Constructs a prompt for the llama model to extract event details from user input.
+    Constructs a prompt to guide the language model to parse event details.
 
     Args:
-        event_text (str): Free-form text input provided by the user.
+        event_text (str): The raw event description provided by the user.
 
     Returns:
         str: The constructed prompt.
     """
     return f"""
-Extract the following event details from the user-provided text and return them as a JSON object.
+Extract the event details from the following text and return them as a JSON object that conforms to the schema below:
 
-Input Text: "{event_text}"
+Input: "{event_text}"
 
-The JSON object should follow this schema:
+Schema:
 {{
-    "uid": "Unique identifier for the event (string, required).",
-    "dtstart": "Start date and time of the event in ISO 8601 format (string, required, e.g., '2023-11-20T10:00:00').",
-    "dtend": "End date and time of the event in ISO 8601 format (string, optional, e.g., '2023-11-20T11:00:00').",
-    "summary": "A brief title or summary of the event (string, required).",
-    "description": "Detailed description of the event (string, optional).",
-    "location": "The physical or virtual location of the event (string, optional).",
-    "categories": "A list of categories or tags for the event (list of strings, optional).",
-    "status": "The status of the event (string, optional, e.g., 'CONFIRMED', 'TENTATIVE', 'CANCELLED').",
-    "priority": "Priority level of the event (integer, optional, 0-9).",
-    "event_class": "Classification of the event (string, optional, e.g., 'PUBLIC', 'PRIVATE', 'CONFIDENTIAL').",
+    "uid": "string (required): A unique identifier for the event.",
+    "dtstart": "string (required): The event start date and time in ISO 8601 format (e.g., '2023-11-20T10:00:00').",
+    "dtend": "string (optional): The event end date and time in ISO 8601 format (e.g., '2023-11-20T11:00:00').",
+    "summary": "string (required): A brief title or summary of the event.",
+    "description": "string (optional): A detailed description of the event.",
+    "location": "string (optional): The physical or virtual location of the event.",
+    "categories": "list of strings (optional): Tags or categories for the event.",
+    "status": "string (optional): The event's status (e.g., 'CONFIRMED', 'TENTATIVE', 'CANCELLED').",
+    "priority": "integer (optional): The priority level of the event (0-9).",
+    "event_class": "string (optional): The classification of the event (e.g., 'PUBLIC', 'PRIVATE', 'CONFIDENTIAL').",
     "organizer": {{
-        "name": "Name of the event organizer (string, optional).",
-        "email": "Email address of the organizer (string, optional, valid email format)."
+        "name": "string (optional): The name of the event organizer.",
+        "email": "string (required if organizer is provided): The email address of the organizer."
     }},
     "attendees": [
         {{
-            "name": "Name of the attendee (string, optional).",
-            "email": "Email address of the attendee (string, required, valid email format)."
+            "name": "string (optional): The name of the attendee.",
+            "email": "string (required): The email address of the attendee."
         }}
     ],
-    "rrule": "Recurrence rule for repeating events (string, optional, e.g., 'FREQ=WEEKLY;INTERVAL=1;BYDAY=MO')."
+    "url": "string (optional): A URL related to the event.",
+    "rrule": "string (optional): A recurrence rule in string format (e.g., 'FREQ=WEEKLY;INTERVAL=1;BYDAY=MO')."
 }}
 
-If any information is missing or cannot be inferred from the text, leave it out of the JSON object. Ensure the JSON is valid and compatible with the schema above.
+Ensure the JSON response adheres strictly to this schema.
 """
 
 
-def parse_event_details(prompt: str) -> Optional[ICSAttributes]:
+def parse_event_details(event_text: str) -> Optional[ICSAttributes]:
     """
-    Parses event details from a prompt string using the Ollama API and returns an ICSAttributes object.
+    Parses the user-provided text into an ICSAttributes object.
 
     Args:
-        prompt (str): The input prompt containing event details.
+        event_text (str): Raw user input describing the event.
 
     Returns:
-        Optional[ICSAttributes]: The parsed ICSAttributes object or None if parsing fails.
+        Optional[ICSAttributes]: Parsed and validated ICSAttributes object.
     """
     try:
-        # Send a message to the Ollama API
+        # Construct a prompt for the language model
+        prompt = construct_prompt(event_text)
+
+        # Send the prompt to the language model
         response = ollama.chat(
             model='llama3.2',
             messages=[{'role': 'user', 'content': prompt}]
@@ -75,7 +76,7 @@ def parse_event_details(prompt: str) -> Optional[ICSAttributes]:
         message_content = response.get('message', {}).get('content', '')
 
         if not message_content:
-            logging.error("Ollama API returned an empty response.")
+            logging.error("Language model returned an empty response.")
             return None
 
         # Parse the response content into a dictionary
@@ -86,10 +87,8 @@ def parse_event_details(prompt: str) -> Optional[ICSAttributes]:
             return None
 
         # Validate and return the ICSAttributes object
-        event_details = ICSAttributes(**parsed_data)
-        logging.info("Successfully parsed event details into ICSAttributes.")
-        return event_details
+        return ICSAttributes(**parsed_data)
 
     except Exception as e:
-        logging.error(f"An error occurred while parsing event details: {e}")
+        logging.error(f"Error occurred while parsing event details: {e}")
         return None
