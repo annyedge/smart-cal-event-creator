@@ -21,7 +21,7 @@ class ICSAttributes(BaseModel):
     event_class: Optional[str] = None  # e.g., PUBLIC, PRIVATE, CONFIDENTIAL
     organizer: Optional[Attendee] = None
     attendees: Optional[List[Attendee]] = None
-    url: Optional[HttpUrl] = None
+    url: Optional[HttpUrl] = None  # Allow empty or None
     recurrence_id: Optional[str] = None
     rrule: Optional[str] = None  # Recurrence rules in string format
     exdate: Optional[List[datetime]] = None  # List of excluded dates

@@ -18,7 +18,8 @@ def construct_prompt(event_text: str) -> str:
         str: The constructed prompt.
     """
     return f"""
-Extract the event details from the following text and return them as a JSON object that conforms to the schema below:
+Extract the event details from the following text and return them as a JSON object that conforms to the schema below.
+Omit any fields where the value is empty or unavailable.
 
 Input: "{event_text}"
 
@@ -48,7 +49,7 @@ Schema:
     "rrule": "string (optional): A recurrence rule in string format (e.g., 'FREQ=WEEKLY;INTERVAL=1;BYDAY=MO')."
 }}
 
-Ensure the JSON response adheres strictly to this schema.
+Ensure the JSON is well-formed, and do not include any fields with empty or null values.
 """
 
 
@@ -72,6 +73,9 @@ def parse_event_details(event_text: str) -> Optional[ICSAttributes]:
             messages=[{'role': 'user', 'content': prompt}]
         )
 
+        # Log the raw response for debugging
+        logging.debug(f"Raw API response: {response}")
+
         # Extract the content from the response
         message_content = response.get('message', {}).get('content', '')
 
@@ -79,12 +83,17 @@ def parse_event_details(event_text: str) -> Optional[ICSAttributes]:
             logging.error("Language model returned an empty response.")
             return None
 
-        # Parse the response content into a dictionary
+        # Ensure the response content is JSON
         try:
             parsed_data = json.loads(message_content)
-        except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse response content as JSON: {e}")
+        except json.JSONDecodeError:
+            logging.error("Response content is not valid JSON.")
+            logging.error(f"Raw message content: {message_content}")
             return None
+
+        # Clean the URL field if empty
+        if parsed_data.get("url") == "":
+            parsed_data["url"] = None
 
         # Validate and return the ICSAttributes object
         return ICSAttributes(**parsed_data)
