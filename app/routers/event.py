@@ -2,7 +2,7 @@ import logging
 from io import BytesIO
 
 from fastapi import APIRouter, Form, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
 
 from app.services.ics_generator import create_ics
 from app.services.parser import parse_event_details
@@ -10,13 +10,13 @@ from app.services.parser import parse_event_details
 router = APIRouter()
 
 
-@router.post("/create")
+@router.post("/process", response_class=HTMLResponse)
 async def create_event(event_text: str = Form(...)):
     """
-    Create a calendar event (.ics) from a user-provided text description.
+    Create a calendar event (.ics) from the submitted form text.
 
     Args:
-        event_text (str): The raw event details provided by the user.
+        event_text (str): The raw event details provided in the form.
 
     Returns:
         StreamingResponse: The generated .ics file for download.
