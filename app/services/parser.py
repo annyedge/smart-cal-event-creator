@@ -18,12 +18,11 @@ def construct_prompt(event_text: str) -> str:
         str: The constructed prompt.
     """
     return f"""
-Extract the event details from the following text and return them as a JSON object that conforms to the schema below.
-Omit any fields where the value is empty or unavailable.
+Extract the event details from the following text and return them as a valid JSON object. Do not include any explanation, comments, or additional text. Only return the JSON object.
 
 Input: "{event_text}"
 
-Schema:
+Expected JSON Schema:
 {{
     "uid": "string (required): A unique identifier for the event.",
     "dtstart": "string (required): The event start date and time in ISO 8601 format (e.g., '2023-11-20T10:00:00').",
@@ -50,6 +49,7 @@ Schema:
 }}
 
 Ensure the JSON is well-formed, and do not include any fields with empty or null values.
+Only return the JSON object. No code or additional text.
 """
 
 
@@ -90,10 +90,6 @@ def parse_event_details(event_text: str) -> Optional[ICSAttributes]:
             logging.error("Response content is not valid JSON.")
             logging.error(f"Raw message content: {message_content}")
             return None
-
-        # Clean the URL field if empty
-        if parsed_data.get("url") == "":
-            parsed_data["url"] = None
 
         # Validate and return the ICSAttributes object
         return ICSAttributes(**parsed_data)
