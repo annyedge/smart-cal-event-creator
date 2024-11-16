@@ -91,6 +91,14 @@ def parse_event_details(event_text: str) -> Optional[ICSAttributes]:
             logging.error(f"Raw message content: {message_content}")
             return None
 
+        # Clean the organizer field if email is missing
+        if parsed_data.get("organizer") and not parsed_data["organizer"].get("email"):
+            parsed_data["organizer"] = None  # Remove organizer if email is missing
+
+        # Clean the URL field if empty
+        if parsed_data.get("url") == "":
+            parsed_data["url"] = None
+
         # Validate and return the ICSAttributes object
         return ICSAttributes(**parsed_data)
 
