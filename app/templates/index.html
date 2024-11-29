@@ -2,13 +2,40 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Event2Calendar</title>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-<h1>Welcome to Event2Calendar</h1>
-<form action="/api/events/process" method="post">
-    <textarea name="event_text" placeholder="Paste event details here"></textarea>
-    <button type="submit">Create Event</button>
-</form>
+<div class="container">
+    <h1>Welcome to Event2Calendar</h1>
+    <form id="eventForm" aria-label="Event form">
+        <label for="event_text" class="sr-only">Paste event details here</label>
+        <textarea id="event_text" name="event_text" placeholder="Paste event details here" required></textarea>
+        <button type="submit">Create Event</button>
+    </form>
+    <div id="response"></div>
+</div>
+
+<script>
+    document.getElementById('eventForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+        const data = {
+            event_text: formData.get('event_text')
+        };
+
+        const response = await fetch('/api/events/process', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+        document.getElementById('response').innerText = JSON.stringify(result, null, 2);
+    });
+</script>
 </body>
 </html>

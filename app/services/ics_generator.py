@@ -17,7 +17,7 @@ def create_ics(ics_attributes: ICSAttributes) -> str:
         str: The filename of the created ICS file.
     """
     try:
-        filename = f"{ics_attributes.uid}.ics"
+        filename = f"outputs/{ics_attributes.uid}.ics"
 
         # Create a calendar and an event
         cal = Calendar()

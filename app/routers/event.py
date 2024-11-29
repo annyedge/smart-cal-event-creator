@@ -10,7 +10,7 @@ from app.services.parser import parse_event_details
 router = APIRouter()
 
 
-@router.post("/process", response_class=HTMLResponse)
+@router.post("/process", tags=["Events"], response_class=HTMLResponse)
 async def create_event(event_text: str = Form(...)):
     """
     Create a calendar event (.ics) from the submitted form text.

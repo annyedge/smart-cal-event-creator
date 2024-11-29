@@ -16,7 +16,7 @@ app = FastAPI(
 templates = Jinja2Templates(directory="app/templates")
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Include the event router
 app.include_router(event_router, prefix="/api/events", tags=["Events"])
