@@ -1,107 +1,103 @@
-import json
 import logging
 from typing import Optional
-
-import ollama  # Assuming you are using Ollama for language model processing
-
-from app.models.ics_model import ICSAttributes
-
-
-def construct_prompt(event_text: str) -> str:
-    """
-    Constructs a prompt to guide the language model to parse event details.
-
-    Args:
-        event_text (str): The raw event description provided by the user.
-
-    Returns:
-        str: The constructed prompt.
-    """
-    return f"""
-Extract the event details from the following text and return them as a valid JSON object. Do not include any explanation, comments, or additional text. Only return the JSON object.
-
-Input: "{event_text}"
-
-Expected JSON Schema:
-{{
-    "uid": "string (required): A unique identifier for the event.",
-    "dtstart": "string (required): The event start date and time in ISO 8601 format (e.g., '2023-11-20T10:00:00').",
-    "dtend": "string (optional): The event end date and time in ISO 8601 format (e.g., '2023-11-20T11:00:00').",
-    "summary": "string (required): A brief title or summary of the event.",
-    "description": "string (optional): A detailed description of the event.",
-    "location": "string (optional): The physical or virtual location of the event.",
-    "categories": "list of strings (optional): Tags or categories for the event.",
-    "status": "string (optional): The event's status (e.g., 'CONFIRMED', 'TENTATIVE', 'CANCELLED').",
-    "priority": "integer (optional): The priority level of the event (0-9).",
-    "event_class": "string (optional): The classification of the event (e.g., 'PUBLIC', 'PRIVATE', 'CONFIDENTIAL').",
-    "organizer": {{
-        "name": "string (optional): The name of the event organizer.",
-        "email": "string (required if organizer is provided): The email address of the organizer."
-    }},
-    "attendees": [
-        {{
-            "name": "string (optional): The name of the attendee.",
-            "email": "string (required): The email address of the attendee."
-        }}
-    ],
-    "url": "string (optional): A URL related to the event.",
-    "rrule": "string (optional): A recurrence rule in string format (e.g., 'FREQ=WEEKLY;INTERVAL=1;BYDAY=MO')."
-}}
-
-Ensure the JSON is well-formed, and do not include any fields with empty or null values.
-Only return the JSON object. No code or additional text.
-"""
+from langchain.prompts import PromptTemplate
+from langchain_ollama import OllamaLLM
+from langchain.output_parsers import PydanticOutputParser, OutputFixingParser
+from app.models.ics_model import ICSAttributes # Pydantic model
+import re
 
 
 def parse_event_details(event_text: str) -> Optional[ICSAttributes]:
-    """
-    Parses the user-provided text into an ICSAttributes object.
+    if not event_text:
+        logging.error("Event text is empty")
+        return None
 
-    Args:
-        event_text (str): Raw user input describing the event.
-
-    Returns:
-        Optional[ICSAttributes]: Parsed and validated ICSAttributes object.
-    """
     try:
-        # Construct a prompt for the language model
-        prompt = construct_prompt(event_text)
+        # Initialize the PydanticOutputParser with your ICSAttributes model
+        parser = PydanticOutputParser(pydantic_object=ICSAttributes)
 
-        # Send the prompt to the language model
-        response = ollama.chat(
-            model='llama3.2',
-            messages=[{'role': 'user', 'content': prompt}]
+        # Custom format instructions to prevent the LLM from outputting the schema
+        format_instructions = """
+Provide a JSON object with the following fields:
+
+- uid (string): A unique identifier for the event.
+- dtstart (string): The event start date and time in ISO 8601 format.
+- dtend (string, optional): The event end date and time in ISO 8601 format.
+- summary (string): A brief title or summary of the event.
+- description (string, optional): A detailed description of the event.
+- location (string, optional): The physical or virtual location of the event.
+- categories (list of strings, optional): Tags or categories for the event.
+- status (string, optional): The event's status (e.g., 'CONFIRMED', 'TENTATIVE', 'CANCELLED').
+- priority (integer, optional): The priority level of the event (0-9).
+- event_class (string, optional): The classification of the event (e.g., 'PUBLIC', 'PRIVATE', 'CONFIDENTIAL').
+- organizer (object, optional): The organizer of the event, with fields:
+  - name (string, optional): The name of the organizer.
+  - email (string): The email address of the organizer.
+- attendees (list of objects, optional): A list of attendees, each with fields:
+  - name (string, optional): The name of the attendee.
+  - email (string): The email address of the attendee.
+- url (string, optional): A URL related to the event.
+- rrule (string, optional): A recurrence rule in string format (e.g., 'FREQ=WEEKLY;INTERVAL=1;BYDAY=MO').
+
+Ensure the JSON is well-formed and does not include any fields with empty or null values.
+Do not include any explanations or additional text. Only output the JSON object.
+"""
+
+        # Construct the prompt
+        prompt_template = PromptTemplate(
+            template="""
+Your task is to extract event details from the given text and return them as a JSON object matching the specified format.
+
+Instructions:
+{format_instructions}
+
+Text:
+"{event_text}"
+
+Output:
+""",
+            input_variables=["event_text"],
+            partial_variables={
+                "format_instructions": format_instructions,
+            },
         )
 
-        # Log the raw response for debugging
-        logging.debug(f"Raw API response: {response}")
+        # Initialize the language model with temperature set to 0
+        ollama_llm = OllamaLLM(
+            base_url="http://localhost:11434",
+            model="llama3.2",  # Adjust the model name if necessary
+            temperature=0,  # Set temperature to 0 for deterministic output
+        )
 
-        # Extract the content from the response
-        message_content = response.get('message', {}).get('content', '')
+        # Use OutputFixingParser to handle parsing errors
+        fixing_parser = OutputFixingParser.from_llm(parser=parser, llm=ollama_llm)
 
-        if not message_content:
-            logging.error("Language model returned an empty response.")
-            return None
+        # Create a chain using the Runnable interface
+        chain = prompt_template | ollama_llm
 
-        # Ensure the response content is JSON
+        # Run the chain to get the LLM's raw output
+        response = chain.invoke({"event_text": event_text})
+
+        # Log the LLM's response for debugging
+        logging.debug(f"LLM Response: {response}")
+
+        # Attempt to extract JSON from the response
         try:
-            parsed_data = json.loads(message_content)
-        except json.JSONDecodeError:
-            logging.error("Response content is not valid JSON.")
-            logging.error(f"Raw message content: {message_content}")
+            # Use regex to extract JSON object from the response
+            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            if not json_match:
+                raise ValueError("No JSON object found in LLM response.")
+            json_str = json_match.group(0)
+
+            # Parse the output using the fixing parser
+            parsed_output = fixing_parser.parse(json_str)
+        except Exception as e:
+            logging.error(f"Failed to extract JSON from LLM output: {e}")
             return None
-
-        # Clean the organizer field if email is missing
-        if parsed_data.get("organizer") and not parsed_data["organizer"].get("email"):
-            parsed_data["organizer"] = None  # Remove organizer if email is missing
-
-        # Clean the URL field if empty
-        if parsed_data.get("url") == "":
-            parsed_data["url"] = None
 
         # Validate and return the ICSAttributes object
-        return ICSAttributes(**parsed_data)
+        return parsed_output
 
     except Exception as e:
-        logging.error(f"Error occurred while parsing event details: {e}")
+        logging.error(f"An error occurred while parsing event details: {e}")
         return None
