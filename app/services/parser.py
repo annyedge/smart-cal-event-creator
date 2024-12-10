@@ -19,7 +19,7 @@ prompt = PromptTemplate(
 def parse_event_with_langchain(event_description: str, current_timestamp: datetime):
     print("Parsing event with LangChain: ", event_description)
 
-    llm = OllamaLLM(model="llama3.2")
+    llm = OllamaLLM(model="llama3.2", base_url="http://0.0.0.0:11434")
     try:
         sequence = prompt | llm
         result = sequence.invoke(
