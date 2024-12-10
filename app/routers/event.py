@@ -18,7 +18,13 @@ async def process_event(event_desc: EventDescription):
     output_file_path = "event.ics"
     try:
         ics_file_path = build_ical_from_description(event_description, current_timestamp, output_file_path)
-        return FileResponse(ics_file_path, media_type="text/calendar")
+        return FileResponse(
+            ics_file_path,
+            media_type="text/calendar",
+            headers={
+                "Content-Disposition": f"attachment; filename=event.ics"
+            }
+        )
     except HTTPException as e:
         raise e
     except Exception as e:
