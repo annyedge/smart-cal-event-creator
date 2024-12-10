@@ -1,17 +1,19 @@
 import logging
+from datetime import datetime
 from io import BytesIO
 
-from fastapi import APIRouter, Form, HTTPException
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi import HTTPException, APIRouter
+from fastapi.responses import HTMLResponse, StreamingResponse
 
-from app.services.ics_generator import create_ics
-from app.services.parser import parse_event_details
+from app.models import EventRequest
+from app.services.parser import build_ical_from_description  # Adjust path as needed
 
 router = APIRouter()
 
 
 @router.post("/process", tags=["Events"], response_class=HTMLResponse)
-async def create_event(event_text: str = Form(...)):
+async def create_event(payload: EventRequest):
+    event_text = payload.event_text
     """
     Create a calendar event (.ics) from the submitted form text.
 
@@ -22,16 +24,14 @@ async def create_event(event_text: str = Form(...)):
         StreamingResponse: The generated .ics file for download.
     """
     try:
-        # Parse event details from text
-        parsed_event = parse_event_details(event_text)
-        if not parsed_event:
-            raise HTTPException(status_code=400, detail="Failed to parse event details.")
+        current_time = datetime.now()
+        output_file_path = "event.ics"  # or a temporary path you manage
 
-        # Generate the .ics file
-        ics_file_path = create_ics(parsed_event)
+        # Call the parser service to build the ICS file
+        build_ical_from_description(event_text, current_time, output_file_path)
 
-        # Stream the .ics file to the user
-        with open(ics_file_path, "rb") as f:
+        # Read the generated ICS file and return as a response
+        with open(output_file_path, "rb") as f:
             ics_content = f.read()
 
         return StreamingResponse(

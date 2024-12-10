@@ -1,71 +1,86 @@
-# parser.py
+import json
+from datetime import datetime, timedelta
 
-import logging
-from typing import Optional
-import re
-
-from langchain.prompts import PromptTemplate
+from dateparser import parse
+from icalendar import Calendar, Event
+from langchain_core.prompts import PromptTemplate
 from langchain_ollama import OllamaLLM
-from langchain.output_parsers import PydanticOutputParser, OutputFixingParser
 
-from app.models.ics_model import ICSAttributes  # Your Pydantic model
-from app.prompts.prompts import prompt_template, format_instructions  # Your prompt template
+from app.prompts.prompts import prompt_template
+
+prompt = PromptTemplate(
+    template=prompt_template,
+    input_variables=["current_time", "event_description"]
+)
 
 
-def parse_event_details(event_text: str) -> Optional[ICSAttributes]:
-    if not event_text:
-        logging.error("Event text is empty")
-        return None
+def parse_event_with_langchain(event_description: str, current_timestamp: datetime):
 
+    print("Parsing event with LangChain: ", event_description)
+
+    llm = OllamaLLM(model="llama3.2")
     try:
-        # Initialize the PydanticOutputParser with your ICSAttributes model
-        parser = PydanticOutputParser(pydantic_object=ICSAttributes)
-
-        # Construct the prompt
-        prompt = PromptTemplate(
-            template=prompt_template,
-            input_variables=["event_text"],
-            partial_variables={
-                "format_instructions": format_instructions,
-            },
-        )
-
-        # Initialize the language model with temperature set to 0
-        ollama_llm = OllamaLLM(
-            base_url="http://localhost:11434",
-            model="llama3.2",  # Adjust the model name if necessary
-            temperature=0,  # Set temperature to 0 for deterministic output
-        )
-
-        # Use OutputFixingParser to handle parsing errors
-        fixing_parser = OutputFixingParser.from_llm(parser=parser, llm=ollama_llm)
-
-        # Create a chain using the Runnable interface
-        chain = prompt | ollama_llm
-
-        # Run the chain to get the LLM's raw output
-        response = chain.invoke({"event_text": event_text})
-
-        # Log the LLM's response for debugging
-        logging.debug(f"LLM Response: {response}")
-
-        # Attempt to extract JSON from the response
-        try:
-            # Use regex to extract JSON object from the response
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if not json_match:
-                raise ValueError("No JSON object found in LLM response.")
-            json_str = json_match.group(0)
-
-            # Parse the output using the fixing parser
-            parsed_output = fixing_parser.parse(json_str)
-        except Exception as e:
-            logging.error(f"Failed to extract JSON from LLM output: {e}")
+        sequence = prompt | llm
+        result = sequence.invoke(
+            input={"current_time": current_timestamp.isoformat(), "event_description": event_description})
+        if result is None:
+            print("Error: result is None")
             return None
-
-        # Validate and return the ICSAttributes object
-        return parsed_output
-
+        elif isinstance(result, str):
+            data = json.loads(result)
+            return data
+        else:
+            print("Error: result is not a string")
+            return None
     except Exception as e:
-        logging.error(f"An error occurred while parsing event details: {e}")
+        # Handle the exception
+        print(f"An error occurred: {e}")
         return None
+
+
+def create_ics_event(summary: str, start: datetime, end: datetime):
+    cal = Calendar()
+    cal.add('prodid', '-//My Product//example.com//')
+    cal.add('version', '2.0')
+
+    event = Event()
+    event.add('uid', 'some-unique-id@example.com')
+    event.add('dtstamp', datetime.utcnow())
+    event.add('dtstart', start)
+    event.add('dtend', end)
+    event.add('summary', summary)
+
+    cal.add_component(event)
+    return cal
+
+
+def build_ical_from_description(event_description: str, current_timestamp: datetime, output_file_path: str):
+    try:
+        # 1. Use LangChain to parse the event information
+        parsed = parse_event_with_langchain(event_description, current_timestamp)
+        summary = parsed.get('summary')
+        start_str = parsed.get('start_time')
+        end_str = parsed.get('end_time')
+
+        # 2. Convert these strings to datetimes relative to current_timestamp
+        start_dt = parse(start_str, settings={'RELATIVE_BASE': current_timestamp})
+        if start_dt is None:
+            raise ValueError("Could not parse start time from description.")
+
+        end_dt = parse(end_str, settings={'RELATIVE_BASE': current_timestamp})
+        if end_dt is None:
+            # If cannot parse end time, default to 1 hour after start
+            end_dt = start_dt + timedelta(hours=1)
+
+        # 3. Create iCalendar event
+        cal = create_ics_event(summary, start_dt, end_dt)
+
+        # 4. Write the ICS file to disk
+        ics_content = cal.to_ical()
+        with open(output_file_path, 'wb') as f:
+            f.write(ics_content)
+        print(f"ICS file created at {output_file_path}")
+    except ValueError as e:
+        print(f"Error creating event: {e}")
+        # Return a more informative error message
+        return {"error": str(e)}
