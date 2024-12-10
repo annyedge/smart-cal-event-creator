@@ -79,7 +79,31 @@ def build_ical_from_description(event_description: str, current_timestamp: datet
         print(f"Parsing start time: {start_str}")
         start_dt = parse(start_str, settings={'RELATIVE_BASE': current_timestamp})
         if start_dt is None:
-            raise ValueError(f"Could not parse start time from description: {start_str}")
+            # Try to parse start time manually
+            today = current_timestamp.date()
+            day = None
+            if "sunday" in start_str.lower():
+                day = 6
+            elif "monday" in start_str.lower():
+                day = 0
+            elif "tuesday" in start_str.lower():
+                day = 1
+            elif "wednesday" in start_str.lower():
+                day = 2
+            elif "thursday" in start_str.lower():
+                day = 3
+            elif "friday" in start_str.lower():
+                day = 4
+            elif "saturday" in start_str.lower():
+                day = 5
+
+            if day is not None:
+                days_ahead = day - today.weekday()
+                if days_ahead <= 0:  # Target day already happened this week
+                    days_ahead += 7
+                start_dt = datetime.combine(today + timedelta(days=days_ahead), parse(start_str.split(" at ")[1], settings={'RELATIVE_BASE': current_timestamp}).time())
+            else:
+                raise ValueError(f"Could not parse start time from description: {start_str}")
 
         print(f"Parsing end time: {end_str}")
         end_dt = parse(end_str, settings={'RELATIVE_BASE': current_timestamp})

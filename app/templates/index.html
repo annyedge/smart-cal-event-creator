@@ -22,7 +22,7 @@
         event.preventDefault();
         const formData = new FormData(this);
         const data = {
-            event_text: formData.get('event_text')
+            description: formData.get('event_text')
         };
 
         const response = await fetch('/api/events/process', {
