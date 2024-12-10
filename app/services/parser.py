@@ -1,11 +1,11 @@
 import json
 from datetime import datetime, timedelta
-
 from dateparser import parse
 from icalendar import Calendar, Event
 from langchain_core.prompts import PromptTemplate
 from langchain_ollama import OllamaLLM
 
+# Assuming prompt_template is defined in your prompts.py file as shown
 from app.prompts.prompts import prompt_template
 
 prompt = PromptTemplate(
@@ -15,20 +15,24 @@ prompt = PromptTemplate(
 
 
 def parse_event_with_langchain(event_description: str, current_timestamp: datetime):
-
     print("Parsing event with LangChain: ", event_description)
 
     llm = OllamaLLM(model="llama3.2")
     try:
         sequence = prompt | llm
         result = sequence.invoke(
-            input={"current_time": current_timestamp.isoformat(), "event_description": event_description})
+            input={"current_time": current_timestamp.isoformat(), "event_description": event_description}
+        )
         if result is None:
             print("Error: result is None")
             return None
         elif isinstance(result, str):
-            data = json.loads(result)
-            return data
+            try:
+                data = json.loads(result)
+                return data
+            except json.JSONDecodeError:
+                print("Error: Failed to decode JSON from result")
+                return None
         else:
             print("Error: result is not a string")
             return None
@@ -54,13 +58,19 @@ def create_ics_event(summary: str, start: datetime, end: datetime):
     return cal
 
 
-def build_ical_from_description(event_description: str, current_timestamp: datetime, output_file_path: str):
+def build_ical_from_description(event_description: str, current_timestamp: datetime, output_file_path: str = "event.ics"):
     try:
         # 1. Use LangChain to parse the event information
         parsed = parse_event_with_langchain(event_description, current_timestamp)
+        if not parsed:
+            raise ValueError("Failed to parse event description")
+
         summary = parsed.get('summary')
         start_str = parsed.get('start_time')
         end_str = parsed.get('end_time')
+
+        if not summary or not start_str:
+            raise ValueError("Missing required fields in parsed data")
 
         # 2. Convert these strings to datetimes relative to current_timestamp
         start_dt = parse(start_str, settings={'RELATIVE_BASE': current_timestamp})
