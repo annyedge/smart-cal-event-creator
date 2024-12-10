@@ -1,44 +1,23 @@
-import logging
 from datetime import datetime
-from io import BytesIO
 
 from fastapi import HTTPException, APIRouter
-from fastapi.responses import HTMLResponse, StreamingResponse
 
-from app.models import EventRequest
+from app.models.input import EventDescription
 from app.services.parser import build_ical_from_description  # Adjust path as needed
 
 router = APIRouter()
 
 
-@router.post("/process", tags=["Events"], response_class=HTMLResponse)
-async def create_event(payload: EventRequest):
-    event_text = payload.event_text
-    """
-    Create a calendar event (.ics) from the submitted form text.
-
-    Args:
-        event_text (str): The raw event details provided in the form.
-
-    Returns:
-        StreamingResponse: The generated .ics file for download.
-    """
+@router.post("/api/events/process")
+async def process_event(event_desc: EventDescription):
+    current_timestamp = datetime.now()
+    event_description = event_desc.description
+    output_file_path = "event.ics"
     try:
-        current_time = datetime.now()
-        output_file_path = "event.ics"  # or a temporary path you manage
-
-        # Call the parser service to build the ICS file
-        build_ical_from_description(event_text, current_time, output_file_path)
-
-        # Read the generated ICS file and return as a response
-        with open(output_file_path, "rb") as f:
-            ics_content = f.read()
-
-        return StreamingResponse(
-            BytesIO(ics_content),
-            media_type="text/calendar",
-            headers={"Content-Disposition": 'attachment; filename="event.ics"'},
-        )
+        ics_file_path = build_ical_from_description(event_description, current_timestamp, output_file_path)
+        return {"message": "ICS file created successfully", "file_path": ics_file_path}
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        logging.error(f"Error creating event: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error.")
+        print(f"An unexpected error occurred: {e}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")

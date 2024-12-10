@@ -1,6 +1,8 @@
 import json
 from datetime import datetime, timedelta
+
 from dateparser import parse
+from fastapi import HTTPException
 from icalendar import Calendar, Event
 from langchain_core.prompts import PromptTemplate
 from langchain_ollama import OllamaLLM
@@ -32,6 +34,7 @@ def parse_event_with_langchain(event_description: str, current_timestamp: dateti
                 return data
             except json.JSONDecodeError:
                 print("Error: Failed to decode JSON from result")
+                print("Result:", result)
                 return None
         else:
             print("Error: result is not a string")
@@ -58,7 +61,7 @@ def create_ics_event(summary: str, start: datetime, end: datetime):
     return cal
 
 
-def build_ical_from_description(event_description: str, current_timestamp: datetime, output_file_path: str = "event.ics"):
+def build_ical_from_description(event_description: str, current_timestamp: datetime, output_file_path: str):
     try:
         # 1. Use LangChain to parse the event information
         parsed = parse_event_with_langchain(event_description, current_timestamp)
@@ -73,10 +76,12 @@ def build_ical_from_description(event_description: str, current_timestamp: datet
             raise ValueError("Missing required fields in parsed data")
 
         # 2. Convert these strings to datetimes relative to current_timestamp
+        print(f"Parsing start time: {start_str}")
         start_dt = parse(start_str, settings={'RELATIVE_BASE': current_timestamp})
         if start_dt is None:
-            raise ValueError("Could not parse start time from description.")
+            raise ValueError(f"Could not parse start time from description: {start_str}")
 
+        print(f"Parsing end time: {end_str}")
         end_dt = parse(end_str, settings={'RELATIVE_BASE': current_timestamp})
         if end_dt is None:
             # If cannot parse end time, default to 1 hour after start
@@ -90,7 +95,11 @@ def build_ical_from_description(event_description: str, current_timestamp: datet
         with open(output_file_path, 'wb') as f:
             f.write(ics_content)
         print(f"ICS file created at {output_file_path}")
+        return output_file_path
     except ValueError as e:
         print(f"Error creating event: {e}")
         # Return a more informative error message
-        return {"error": str(e)}
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
