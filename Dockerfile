@@ -48,4 +48,4 @@ ENTRYPOINT []
 # 2. Wait 5 seconds for it to be ready
 # 3. Pull the desired model
 # 4. Start FastAPI via uvicorn
-CMD ["/bin/bash", "-c", "ollama serve > /app/ollama.log 2>&1 & sleep 5 && ollama pull llama2:7b && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["/bin/bash", "-c", "ollama serve > /app/ollama.log 2>&1 & sleep 5 && ollama pull llama2:7b && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
