@@ -19,18 +19,3 @@ poetry shell
 ```bash
 poetry run uvicorn main:app --reload
 ```
-
-## Windows
-If you are a Windows user, you can use Docker to run the application.
-
-### Build the Docker Image
-Build the Docker image:
-```bash
-docker build -t smart-cal-event-creator .
-```
-
-### Run the Docker Image
-Run the Docker image:
-```bash
-docker run -p 8000:8000 -p 11434:11434 smart-cal-event-creator
-```
